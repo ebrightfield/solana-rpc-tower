@@ -4,14 +4,15 @@
 //! including rate limiting, request filtering, retry logic, and more.
 pub mod middleware;
 pub mod service;
-#[cfg(test)]
-pub mod test_helpers;
-
-pub use service::*;
 
 pub mod prelude {
-    pub use crate::builder::{FnClientBuilder, HttpClientBuilder, ServiceBuilderExt};
     pub use crate::middleware::{MaybeEarlyReturnLayer, TooManyRequestsRetry};
+    pub use crate::service::{
+        builder::{FnClientBuilder, HttpClientBuilder, ServiceBuilderExt},
+        parse_response_body::ParseResponseBodyLayer,
+        rpc_sender_impl::{RpcClientSender, SolanaClientRequest, SolanaClientResponse},
+        HttpRequestLayer,
+    };
     pub use crate::service::{RpcRequest, Value};
     pub use reqwest::Url;
     pub use solana_client::client_error::ClientError;

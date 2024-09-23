@@ -32,13 +32,14 @@ pub(crate) fn jsonrpc_request_body(method: String, params: Value, request_id: u6
     .to_string()
 }
 
-pub struct HttpRequestBuilderLayer {
+/// Configuration layer for an RPC client's HTTP requests. Add headers, adjust the default timeout, etc.
+pub struct HttpRequestLayer {
     headers: HeaderMap,
     timeout: Duration,
     url: Url,
 }
 
-impl HttpRequestBuilderLayer {
+impl HttpRequestLayer {
     pub fn new(url: Url) -> Self {
         Self {
             headers: Default::default(),
@@ -58,11 +59,11 @@ impl HttpRequestBuilderLayer {
     }
 }
 
-impl<S> Layer<S> for HttpRequestBuilderLayer {
-    type Service = HttpRequestBuilderService<S>;
+impl<S> Layer<S> for HttpRequestLayer {
+    type Service = HttpJsonRpcRequestService<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        HttpRequestBuilderService::new(
+        HttpJsonRpcRequestService::new(
             service,
             self.url.clone(),
             Some(self.timeout),
@@ -73,7 +74,7 @@ impl<S> Layer<S> for HttpRequestBuilderLayer {
 
 /// Service for layering in configuration to a [reqwest::Request]
 /// and constructing the JSON-RPC body.
-pub struct HttpRequestBuilderService<S> {
+pub struct HttpJsonRpcRequestService<S> {
     service: S,
     request_id: AtomicU64,
     headers: HeaderMap,
@@ -81,7 +82,7 @@ pub struct HttpRequestBuilderService<S> {
     url: Url,
 }
 
-impl<S> HttpRequestBuilderService<S> {
+impl<S> HttpJsonRpcRequestService<S> {
     pub fn new(
         service: S,
         url: Url,
@@ -108,7 +109,7 @@ impl<S> HttpRequestBuilderService<S> {
     }
 }
 
-impl<S> Service<SolanaClientRequest> for HttpRequestBuilderService<S>
+impl<S> Service<SolanaClientRequest> for HttpJsonRpcRequestService<S>
 where
     S: Service<reqwest::Request>,
 {

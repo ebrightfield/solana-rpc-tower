@@ -68,24 +68,13 @@ fn parse_rpc_error(json: Value) -> SolanaClientResponse {
 /// - Extracting the "result" field from a successful response, or
 /// - Parsing the "error" field from an error response
 #[tracing::instrument]
-pub fn jsonrpc_to_solanarpc(mut json: Value) -> SolanaClientResponse {
+pub fn parse_response_errors(mut json: Value) -> SolanaClientResponse {
     if json["error"].is_object() {
         tracing::error!(jsonrpc_error = ?json);
         return parse_rpc_error(json["error"].take());
     }
     tracing::info!(jsonrpc_response=?json);
     Ok(json["result"].take())
-}
-
-pub async fn parse_response_body(response: reqwest::Response) -> Result<Value, BoxError> {
-    tracing::info!("{:?}", response);
-    match response.json().await {
-        Err(e) => {
-            tracing::error!(http_error=?e);
-            Err(Box::new(e) as BoxError)
-        }
-        Result::<Value, _>::Ok(json) => jsonrpc_to_solanarpc(json),
-    }
 }
 
 pub struct ParseResponseBodyLayer;
@@ -159,7 +148,7 @@ where
                             tracing::error!(http_error=?e);
                             Err(Box::new(e) as BoxError)
                         }
-                        Result::<Value, _>::Ok(value) => jsonrpc_to_solanarpc(value),
+                        Result::<Value, _>::Ok(value) => parse_response_errors(value),
                     });
                 }
             }

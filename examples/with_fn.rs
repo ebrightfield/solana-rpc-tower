@@ -4,20 +4,17 @@ use solana_client::{
     client_error::{ClientError, ClientErrorKind},
     rpc_response::{Response, RpcResponseContext, RpcVersionInfo},
 };
-use solana_rpc_tower::{
-    builder::ServiceBuilderExt, rpc_sender_impl::SolanaClientRequest, RpcRequest,
-};
-use tower::{BoxError, ServiceBuilder};
+use solana_rpc_tower::prelude::*;
 
 #[tokio::main]
 async fn main() {
     // We can inline an async closure
-    let _client = ServiceBuilder::new()
+    let _client = RpcClientBuilder::new()
         .with_fn(|req| async move { Ok(req.1) })
         .build_rpc_client();
 
     // Or we can pass in a much more involved routine.
-    let client = ServiceBuilder::new()
+    let client = RpcClientBuilder::new()
         .with_fn(fake_service)
         .build_rpc_client();
     let _ = client.get_version().await;

@@ -15,7 +15,7 @@ use serde_json::Value;
 use solana_client::rpc_request::RpcRequest;
 use tower::{BoxError, Layer, Service};
 
-use crate::rpc_sender_impl::SolanaClientRequest;
+use crate::service::rpc_sender_impl::SolanaClientRequest;
 
 #[derive(Debug, Clone)]
 pub struct CacheEntry {

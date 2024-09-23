@@ -15,7 +15,7 @@ use super::{
         reqwest_client, HttpServiceOptionalRetry, RpcClientSender, SolanaClientRequest,
         SolanaClientResponse,
     },
-    HttpRequestBuilderLayer, ParseResponseBodyLayer,
+    HttpRequestLayer, ParseResponseBodyLayer,
 };
 
 pub trait ServiceBuilderExt<L> {
@@ -85,7 +85,7 @@ where
         let url_str = url.to_string();
         let service = service_builder
             .layer(ParseResponseBodyLayer)
-            .layer(HttpRequestBuilderLayer::new(url))
+            .layer(HttpRequestLayer::new(url))
             .option_layer(retry_layer)
             .service(reqwest_client());
         RpcClientSender::new_with_service(url_str, service).into_rpc_client(commitment)

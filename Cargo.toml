@@ -21,7 +21,6 @@ tracing = "0.1.40"
 crossbeam-channel = "0.5.13"
 jsonrpc-core = "18.0.0"
 jsonrpc-http-server = "18.0.0"
-solana-transaction-status = "2.0.10"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
 [[examples]]
@@ -29,6 +28,9 @@ name = "basic"
 
 [[examples]]
 name = "builder"
+
+[[examples]]
+name = "cache"
 
 [[examples]]
 name = "concurrency_limit"
