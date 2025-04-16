@@ -14,7 +14,8 @@ pub mod prelude {
         HttpRequestLayer,
     };
     pub use crate::service::{RpcRequest, Value};
-    pub use reqwest::Url;
+    pub use reqwest::{Client as ReqwestClient, Response as ReqwestResponse, Url};
     pub use solana_client::client_error::ClientError;
+    pub use solana_rpc_client_api::response::{Response as SolanaRpcResponse, RpcResponseContext};
     pub use tower::{BoxError, ServiceBuilder as RpcClientBuilder};
 }

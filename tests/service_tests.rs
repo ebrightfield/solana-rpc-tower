@@ -1,11 +1,12 @@
 use futures::future::BoxFuture;
-use serde_json::Value;
+use serde_json::{json, Value};
 use solana_client::client_error::{ClientError, ClientErrorKind};
 use solana_client::rpc_request::RpcRequest;
 use solana_rpc_tower::prelude::*;
 
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_response::{Response, RpcResponseContext, RpcVersionInfo};
+use solana_rpc_tower::service::HttpJsonRpcRequestService;
 use solana_sdk::pubkey;
 use solana_sdk::transport::TransportError;
 use std::time::{Duration, Instant};
@@ -367,4 +368,19 @@ async fn low_level_constructors() {
         ))
         .to_string()
     );
+}
+
+#[tokio::test]
+async fn generic_jsonrpc_service() {
+    let (url, _) = spawn_test_server(io_handler_v1());
+
+    let mut service = HttpJsonRpcRequestService::new(url.clone(), None, None);
+
+    let method = RpcRequest::GetBalance.to_string();
+    let params = json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHh"]);
+    let response = service
+        .send_expecting_response_context(method, params)
+        .await
+        .unwrap();
+    assert_eq!(response.value, json!(50));
 }
