@@ -6,7 +6,7 @@ use solana_rpc_tower::prelude::*;
 
 use solana_client::nonblocking::rpc_client::RpcClient;
 use solana_client::rpc_response::{Response, RpcResponseContext, RpcVersionInfo};
-use solana_rpc_tower::service::HttpJsonRpcRequestService;
+use solana_rpc_tower::service::HttpJsonRpcService;
 use solana_sdk::pubkey;
 use solana_sdk::transport::TransportError;
 use std::time::{Duration, Instant};
@@ -348,7 +348,7 @@ async fn low_level_constructors() {
     let (url, _) = spawn_test_server(io_handler_v1());
     let service = RpcClientBuilder::new()
         .layer(ParseResponseBodyLayer)
-        .layer(HttpRequestLayer::new(url.clone()))
+        .layer(HttpJsonRpcLayer::new(url.clone()))
         .retry(TooManyRequestsRetry::new(4))
         .service(reqwest::Client::builder().build().unwrap());
 
@@ -370,11 +370,12 @@ async fn low_level_constructors() {
     );
 }
 
+/// Able to execute arbitrary JSON-RPC requests
 #[tokio::test]
-async fn generic_jsonrpc_service() {
+async fn decoupled_jsonrpc_service() {
     let (url, _) = spawn_test_server(io_handler_v1());
 
-    let mut service = HttpJsonRpcRequestService::new(url.clone(), None, None);
+    let mut service = HttpJsonRpcService::new(url.clone(), None, None);
 
     let method = RpcRequest::GetBalance.to_string();
     let params = json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHh"]);
@@ -383,4 +384,30 @@ async fn generic_jsonrpc_service() {
         .await
         .unwrap();
     assert_eq!(response.value, json!(50));
+}
+
+/// Able to batch-execute arbitrary JSON-RPC requests
+#[tokio::test]
+async fn decoupled_jsonrpc_service_batch() {
+    let (url, _) = spawn_test_server(io_handler_v1());
+
+    let mut service = HttpJsonRpcService::new(url.clone(), None, None);
+
+    let method = RpcRequest::GetBalance.to_string();
+    let params = json!(["deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHh"]);
+    let request = vec![
+        (method.clone(), params.clone()),
+        ("getVersion".to_string(), json!([])),
+        ("getLatestBlockhash".to_string(), json!([])),
+    ];
+    let response: Vec<Result<Value, BoxError>> = service.send_batch(request).await.unwrap();
+    let resp0 = response[0].as_ref().unwrap().clone();
+    assert_eq!(resp0["value"], json!(50));
+    let resp1 = response[1].as_ref().unwrap().clone();
+    assert_eq!(resp1["solana-core"], json!("1.18.21"));
+    let resp2 = response[2].as_ref().unwrap().clone();
+    assert_eq!(
+        resp2["value"]["blockhash"],
+        json!("deadbeefXjn8o3yroDHxUtKsZZgoy4GPkPPXfouKNHh")
+    );
 }

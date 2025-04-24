@@ -17,7 +17,7 @@ use tower::util::Either;
 use tower::{BoxError, Service, ServiceBuilder, ServiceExt};
 
 use super::parse_response_body::{ParseResponseBody, ParseResponseBodyLayer};
-use super::{HttpJsonRpcRequestService, HttpRequestLayer};
+use super::{HttpJsonRpcService, HttpJsonRpcLayer};
 
 /// The data types sent to `RpcSender::send`, grouped into a tuple.
 pub type SolanaClientRequest = (RpcRequest, Value);
@@ -116,28 +116,26 @@ where
 
 /// An HTTP client with 429 retry, and parsing certain error types into [ClientError].
 pub type DefaultHttpService =
-    ParseResponseBody<HttpJsonRpcRequestService<Retry<TooManyRequestsRetry, reqwest::Client>>>;
+    ParseResponseBody<HttpJsonRpcService<Retry<TooManyRequestsRetry, reqwest::Client>>>;
 pub type HttpServiceOptionalRetry = ParseResponseBody<
-    HttpJsonRpcRequestService<
-        Either<Retry<TooManyRequestsRetry, reqwest::Client>, reqwest::Client>,
-    >,
+    HttpJsonRpcService<Either<Retry<TooManyRequestsRetry, reqwest::Client>, reqwest::Client>>,
 >;
 
 pub fn default_http_service(url: Url) -> DefaultHttpService {
     ServiceBuilder::new()
         .layer(ParseResponseBodyLayer)
-        .layer(HttpRequestLayer::new(url))
+        .layer(HttpJsonRpcLayer::new(url))
         .retry(TooManyRequestsRetry::new(4))
         .service(reqwest_client())
 }
 
 /// An HTTP client without 429 retry, but which still parses certain error types into [ClientError].
-pub type HttpServiceNoRetry = ParseResponseBody<HttpJsonRpcRequestService<reqwest::Client>>;
+pub type HttpServiceNoRetry = ParseResponseBody<HttpJsonRpcService<reqwest::Client>>;
 
 pub fn minimal_http_service(url: Url) -> HttpServiceNoRetry {
     ServiceBuilder::new()
         .layer(ParseResponseBodyLayer)
-        .layer(HttpRequestLayer::new(url))
+        .layer(HttpJsonRpcLayer::new(url))
         .service(reqwest_client())
 }
 

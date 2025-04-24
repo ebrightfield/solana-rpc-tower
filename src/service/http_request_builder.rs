@@ -14,6 +14,8 @@ use serde_json::{json, Value};
 use solana_client::rpc_response::Response;
 use tower::{BoxError, Layer, Service};
 
+use crate::prelude::SolanaClientResponse;
+
 pub use super::rpc_sender_impl::RpcClientSender;
 use super::{parse_response_body::parse_response_errors, rpc_sender_impl::SolanaClientRequest};
 
@@ -25,24 +27,27 @@ pub(crate) fn rust_version() -> String {
     format!("rust/{}", solana_version::Version::default())
 }
 
-pub(crate) fn jsonrpc_request_body(method: String, params: Value, request_id: u64) -> String {
+pub(crate) fn jsonrpc_request_value(method: String, params: Value, request_id: u64) -> Value {
     json!({
        "jsonrpc": JSON_RPC,
        "id": request_id,
-       "method": method.to_string(),
+       "method": method,
        "params": params,
     })
-    .to_string()
+}
+
+pub(crate) fn jsonrpc_request_body(method: String, params: Value, request_id: u64) -> String {
+    jsonrpc_request_value(method, params, request_id).to_string()
 }
 
 /// Configuration layer for an RPC client's HTTP requests. Add headers, adjust the default timeout, etc.
-pub struct HttpRequestLayer {
+pub struct HttpJsonRpcLayer {
     headers: HeaderMap,
     timeout: Duration,
     url: Url,
 }
 
-impl HttpRequestLayer {
+impl HttpJsonRpcLayer {
     pub fn new(url: Url) -> Self {
         Self {
             headers: Default::default(),
@@ -62,11 +67,11 @@ impl HttpRequestLayer {
     }
 }
 
-impl<S> Layer<S> for HttpRequestLayer {
-    type Service = HttpJsonRpcRequestService<S>;
+impl<S> Layer<S> for HttpJsonRpcLayer {
+    type Service = HttpJsonRpcService<S>;
 
     fn layer(&self, service: S) -> Self::Service {
-        HttpJsonRpcRequestService::new_with_service(
+        HttpJsonRpcService::new_with_service(
             service,
             self.url.clone(),
             Some(self.timeout),
@@ -77,7 +82,7 @@ impl<S> Layer<S> for HttpRequestLayer {
 
 /// Service for layering in configuration to a [reqwest::Request]
 /// and constructing the JSON-RPC body.
-pub struct HttpJsonRpcRequestService<S> {
+pub struct HttpJsonRpcService<S> {
     service: S,
     request_id: AtomicU64,
     headers: HeaderMap,
@@ -85,7 +90,7 @@ pub struct HttpJsonRpcRequestService<S> {
     url: Url,
 }
 
-impl<S> HttpJsonRpcRequestService<S> {
+impl<S> HttpJsonRpcService<S> {
     pub fn new_with_service(
         service: S,
         url: Url,
@@ -112,7 +117,7 @@ impl<S> HttpJsonRpcRequestService<S> {
     }
 }
 
-impl<S> Service<SolanaClientRequest> for HttpJsonRpcRequestService<S>
+impl<S> Service<SolanaClientRequest> for HttpJsonRpcService<S>
 where
     S: Service<reqwest::Request>,
 {
@@ -129,7 +134,7 @@ where
     }
 }
 
-impl<S> Service<(String, Value)> for HttpJsonRpcRequestService<S>
+impl<S> Service<(String, Value)> for HttpJsonRpcService<S>
 where
     S: Service<reqwest::Request>,
 {
@@ -158,7 +163,43 @@ where
     }
 }
 
-impl HttpJsonRpcRequestService<reqwest::Client> {
+impl<S> Service<Vec<(String, Value)>> for HttpJsonRpcService<S>
+where
+    S: Service<reqwest::Request>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Vec<(String, Value)>) -> Self::Future {
+        let body = Value::Array(
+            request
+                .into_iter()
+                .map(|(method, params)| {
+                    let request_id = self.request_id.fetch_add(1, Ordering::Relaxed);
+                    jsonrpc_request_value(method, params, request_id)
+                })
+                .collect::<Vec<_>>(),
+        )
+        .to_string();
+
+        let mut headers = HeaderMap::new();
+        headers.extend(self.headers.clone());
+        let timeout = self.timeout.clone();
+
+        let mut request = reqwest::Request::new(Method::POST, self.url.clone());
+        *request.headers_mut() = headers;
+        *request.timeout_mut() = Some(timeout);
+        *request.body_mut() = Some(body.into());
+        self.service.call(request)
+    }
+}
+
+impl HttpJsonRpcService<reqwest::Client> {
     pub fn new(url: Url, timeout: Option<Duration>, headers: Option<HeaderMap>) -> Self {
         Self::new_with_service(reqwest::Client::new(), url, timeout, headers)
     }
@@ -183,5 +224,23 @@ impl HttpJsonRpcRequestService<reqwest::Client> {
         params: Value,
     ) -> Result<Response<Value>, BoxError> {
         self.send(method, params).await
+    }
+
+    pub async fn send_batch(
+        &mut self,
+        requests: Vec<(String, Value)>,
+    ) -> Result<Vec<SolanaClientResponse>, BoxError> {
+        Service::<Vec<(String, Value)>>::call(self, requests)
+            .and_then(|r| async move { r.json::<Value>().await })
+            .await
+            .map_err(|e| Box::new(e) as BoxError)
+            .and_then(|r| {
+                serde_json::from_value::<Vec<Value>>(r).map_err(|e| Box::new(e) as BoxError)
+            })
+            .map(|r| {
+                r.into_iter()
+                    .map(|v| parse_response_errors(v))
+                    .collect::<Vec<SolanaClientResponse>>()
+            })
     }
 }

@@ -11,7 +11,7 @@ pub mod prelude {
         builder::{FnClientBuilder, HttpClientBuilder, ServiceBuilderExt},
         parse_response_body::ParseResponseBodyLayer,
         rpc_sender_impl::{RpcClientSender, SolanaClientRequest, SolanaClientResponse},
-        HttpRequestLayer,
+        HttpJsonRpcLayer, HttpJsonRpcService,
     };
     pub use crate::service::{RpcRequest, Value};
     pub use reqwest::{Client as ReqwestClient, Response as ReqwestResponse, Url};

@@ -7,5 +7,5 @@ pub mod stats_updater;
 pub use serde_json::Value;
 pub use solana_client::rpc_request::RpcRequest;
 
-pub use http_request_builder::{HttpJsonRpcRequestService, HttpRequestLayer};
+pub use http_request_builder::{HttpJsonRpcService, HttpJsonRpcLayer};
 pub use parse_response_body::{ParseResponseBody, ParseResponseBodyLayer};
